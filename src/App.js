@@ -1,11 +1,13 @@
-import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
-import { Suspense } from 'react'
-import { Canvas } from 'react-three-fiber'
-import Model from './Model'
+import { OrbitControls, PerspectiveCamera, Sky } from '@react-three/drei';
+import { DefaultXRControllers, VRCanvas } from '@react-three/xr';
+import { Suspense } from 'react';
+import Model from './Model';
 
 function App() {
   return (
-    <Canvas>
+    <VRCanvas>
+      <Sky />
+      <DefaultXRControllers />
       <PerspectiveCamera makeDefault position={[1, 1, 1]} />
       <OrbitControls />
       <ambientLight intensity={0.2} />
@@ -13,7 +15,7 @@ function App() {
       <Suspense fallback={null}>
         <Model />
       </Suspense>
-    </Canvas>
+    </VRCanvas>
   );
 }
 
