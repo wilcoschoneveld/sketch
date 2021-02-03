@@ -1,5 +1,7 @@
 import { Physics, useBox, usePlane } from '@react-three/cannon'
+import { useXREvent } from '@react-three/xr'
 import { useState } from 'react'
+import * as THREE from "three"
 
 function Plane(props) {
     const [ref] = usePlane(() => ({ rotation: [-Math.PI / 2, 0, 0], ...props }))
@@ -9,11 +11,12 @@ function Plane(props) {
 }
 
 function Cube(props) {
-    const [ref] = useBox(() => ({ mass: 1, position: [0, 2, -10], ...props }))
+    const { size: args, position } = props;
+    const [ref] = useBox(() => ({ mass: 1, args, position }))
 
     return (
-        <mesh ref={ref}>
-            <boxBufferGeometry attach="geometry" />
+        <mesh ref={ref} position={position}>
+            <boxBufferGeometry attach="geometry" args={args} />
             <meshStandardMaterial color={"orange"} />
         </mesh>
     )
@@ -24,8 +27,23 @@ export default function Game() {
 
     const onClick = (event) => {
         const { x, y, z } = event.intersections[0].point;
-        setCubes([...cubes, [x, y, z]]);
+        const newCube = {
+            small: false,
+            position: [x, y, z]
+        }
+        setCubes([...cubes, newCube]);
     }
+
+    useXREvent('squeeze', (event) => {
+        console.log(event);
+
+        const { x, y, z } = event.controller.controller.position;
+        const newCube = {
+            small: true,
+            position: [x, y, z]
+        }
+        setCubes([...cubes, newCube]);
+    })
 
     return (
         <Physics>
@@ -34,9 +52,9 @@ export default function Game() {
                 <meshBasicMaterial attach="material" visible={false} />
             </mesh>
             <Plane />
-            <Cube />
+            <Cube position={[0, 2, -10]} />
             {cubes.map((cube, i) =>
-                <Cube key={i} position={cube} />
+                <Cube key={i} size={cube.small ? [0.1, 0.1, 0.1] : [1, 1, 1]} position={cube.position} />
             )}
         </Physics>
     )
