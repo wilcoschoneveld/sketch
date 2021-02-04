@@ -1,6 +1,7 @@
-import { Physics, useBox, usePlane } from '@react-three/cannon'
-import { useXREvent } from '@react-three/xr'
+import { Physics, useBox, useLockConstraint, usePlane, usePointToPointConstraint, useSphere } from '@react-three/cannon'
+import { useController, useXREvent } from '@react-three/xr'
 import { useRef, useState } from 'react'
+import { useFrame } from 'react-three-fiber'
 import * as THREE from "three"
 
 function Plane(props) {
@@ -22,74 +23,65 @@ function Cube(props) {
     )
 }
 
-export default function Game() {
-    const [cubes, setCubes] = useState([]);
-    const [state, setState] = useState({ value: "idle" });
-    const [ref, api] = useBox(() => ({ mass: 1, args: [0.5, 0.5, 0.5], position: [0, 0, -20] }));
+function Grab({ grabber, grabbed }) {
+    console.log('render grab', grabber, grabbed);
+    useLockConstraint(grabber, grabbed);
 
-    const prevPosition = useRef();
-    const speed = useRef();
+    return null;
+}
+
+export default function Game() {
+    const rightController = useController("right")
+    const [cubes, setCubes] = useState([]);
+    const [state, setState] = useState("idle");
+    const [boxRef, boxApi] = useBox(() => ({ mass: 0.1, args: [0.1, 0.1, 0.1], position: [2, 1, -10] }));
+
+    const [grabberRef, grabberApi] = useSphere(() => ({
+        mass: 0,
+        args: 0.1, // to check: is this required?
+        position: [-2, 1, -10],
+        collisionFilterGroup: 0,
+        collisionFilterMask: 0  // to check: what does this do?
+    }));
 
     const onDown = (event) => {
-        console.log('down', event);
-        const { x, y, z } = event.intersections[0].point;
-        setState("dragging");
-        api.position.set(x, y, z);
-        prevPosition.current = event.intersections[0].point.clone();
+        setState("grabbing");
+        const position = event.intersections[0].point;
+        grabberApi.position.set(position.x, position.y, position.z);
+        boxApi.position.set(position.x, position.y, position.z);
+
     }
 
     const onMove = (event) => {
         // console.log('move', event);
-        if (state === "dragging") {
-            // console.log('yes');
-            const { x, y, z } = event.intersections[0].point;
-            api.position.set(x, y, z);
-            api.velocity.set(0, 0, 0);
-
-            const currentPosition = event.intersections[0].point;
-            if (prevPosition.current) {
-                if (!speed.current) {
-                    speed.current = new THREE.Vector3();
-                }
-
-                const newSpeed = currentPosition.clone().sub(prevPosition.current).multiplyScalar(60);
-
-                speed.current.multiplyScalar(0.9).add(newSpeed.multiplyScalar(0.1));
-                // console.log(speed.current.x);
-            }
-            prevPosition.current = currentPosition.clone();
+        if (state === "grabbing") {
             // console.log('hey');
+            const position = event.intersections[0].point;
+            grabberApi.position.set(position.x, position.y, position.z);
         }
     }
 
     const onUp = (event) => {
-        console.log('up');
         setState("idle");
-        const { x, y, z } = event.intersections[0].point;
-        // api.position.set(x, y, z);
-        console.log(x, y, z);
-
-        api.velocity.set(speed.current.x, speed.current.y, speed.current.z);
     }
 
-    const onClick = (event) => {
-        const { x, y, z } = event.intersections[0].point;
-        const newCube = {
-            small: false,
-            position: [x, y, z]
-        }
-        setCubes([...cubes, newCube]);
-    }
+    useXREvent('squeezestart', (event) => {
+        setState("grabbing2");
+        const position = rightController.grip.position;
+        grabberApi.position.set(position.x, position.y, position.z);
+        boxApi.position.set(position.x, position.y, position.z);
+    })
 
-    useXREvent('squeeze', (event) => {
-        console.log(event);
-
-        const { x, y, z } = event.controller.controller.position;
-        const newCube = {
-            small: true,
-            position: [x, y, z]
+    useFrame(() => {
+        if (state === "grabbing2") {
+            const { position, rotation } = rightController.grip;
+            grabberApi.position.set(position.x, position.y, position.z);
+            grabberApi.rotation.set(rotation.x, rotation.y, rotation.z);
         }
-        setCubes([...cubes, newCube]);
+    })
+
+    useXREvent('squeezeend', (event) => {
+        setState("idle");
     })
 
     return (
@@ -100,10 +92,16 @@ export default function Game() {
             </mesh>
             <Plane />
             <Cube position={[0, 2, -10]} />
-            <mesh ref={ref}>
-                <boxBufferGeometry attach="geometry" args={[0.5, 0.5, 0.5]} />
+            <mesh ref={boxRef}>
+                <boxBufferGeometry attach="geometry" args={[0.1, 0.1, 0.1]} />
                 <meshStandardMaterial color={"red"} />
             </mesh>
+            <mesh ref={grabberRef}>
+                <sphereBufferGeometry attach="geometry" args={[0.1, 16, 16]} />
+                <meshBasicMaterial transparent={true} color={"orange"} opacity={0.5} />
+            </mesh>
+            {state === "grabbing" && <Grab grabber={grabberRef} grabbed={boxRef} />}
+            {state === "grabbing2" && <Grab grabber={grabberRef} grabbed={boxRef} />}
             {cubes.map((cube, i) =>
                 <Cube key={i} size={cube.small ? [0.1, 0.1, 0.1] : [1, 1, 1]} position={cube.position} />
             )}
